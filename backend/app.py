@@ -42,12 +42,18 @@ def create_app() -> Flask:
     app.config["ENV"] = os.getenv("FLASK_ENV", "development")
     app.config["DEBUG"] = os.getenv("FLASK_DEBUG", "0") == "1"
 
-    # Enable CORS for the configured frontend origin and localhost
-    frontend_origin = os.getenv("FRONTEND_ORIGIN", "http://localhost:3000")
-    allowed_origins = {frontend_origin, "http://localhost:3000"}
+    # Enable CORS for local dev + configured frontend origin
+    allowed_origins = [
+        "http://localhost:3000",
+        os.getenv("FRONTEND_ORIGIN", ""),
+    ]
+    allowed_origins = [o for o in allowed_origins if o]
+
     CORS(
         app,
-        resources={r"/api/*": {"origins": list(allowed_origins)}},
+        origins=allowed_origins,
+        allow_headers=["Content-Type", "Authorization"],
+        methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         supports_credentials=True,
     )
 
