@@ -1,0 +1,41 @@
+### Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pytest_cache/
+.mypy_cache/
+.venv/
+venv/
+env/
+
+### Flask / general backend
+instance/
+*.db
+
+### Node / React
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+### Build output
+build/
+dist/
+.parcel-cache/
+.next/
+out/
+
+### Environment files
+.env
+.env.*
+!.env.example
+
+### OS / editor junk
+.DS_Store
+Thumbs.db
+*.swp
+.vscode/
+.idea/
+

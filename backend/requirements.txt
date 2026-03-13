@@ -1,0 +1,11 @@
+Flask
+Flask-Cors
+psycopg2-binary
+python-dotenv
+Flask-Bcrypt
+PyJWT
+Flask-Limiter
+anthropic
+pypdf
+gunicorn
+sentry-sdk[flask]
