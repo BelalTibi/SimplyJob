@@ -1,7 +1,6 @@
 import os
 
-from flask import Flask, jsonify
-from flask_cors import CORS
+from flask import Flask, jsonify, request
 from dotenv import load_dotenv
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -42,20 +41,43 @@ def create_app() -> Flask:
     app.config["ENV"] = os.getenv("FLASK_ENV", "development")
     app.config["DEBUG"] = os.getenv("FLASK_DEBUG", "0") == "1"
 
-    # Enable CORS for local dev + configured frontend origin
-    allowed_origins = [
-        "http://localhost:3000",
-        os.getenv("FRONTEND_ORIGIN", ""),
-    ]
-    allowed_origins = [o for o in allowed_origins if o]
+    @app.after_request
+    def add_cors_headers(response):
+        allowed_origins = [
+            "http://localhost:3000",
+            os.getenv("FRONTEND_ORIGIN", ""),
+        ]
+        origin = request.headers.get("Origin", "")
+        if origin in allowed_origins:
+            response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Headers"] = (
+            "Content-Type, Authorization"
+        )
+        response.headers["Access-Control-Allow-Methods"] = (
+            "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+        )
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        return response
 
-    CORS(
-        app,
-        origins=allowed_origins,
-        allow_headers=["Content-Type", "Authorization"],
-        methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        supports_credentials=True,
-    )
+    @app.before_request
+    def handle_preflight():
+        if request.method == "OPTIONS":
+            response = app.make_default_options_response()
+            allowed_origins = [
+                "http://localhost:3000",
+                os.getenv("FRONTEND_ORIGIN", ""),
+            ]
+            origin = request.headers.get("Origin", "")
+            if origin in allowed_origins:
+                response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Headers"] = (
+                "Content-Type, Authorization"
+            )
+            response.headers["Access-Control-Allow-Methods"] = (
+                "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+            )
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+            return response
 
     # Register extensions
     bcrypt.init_app(app)
