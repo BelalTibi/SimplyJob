@@ -220,7 +220,10 @@ def create_user_ai_calls_table():
 
 
 def main():
-    create_database_if_not_exists()
+    if os.getenv("DATABASE_URL"):
+        print("Using existing database from DATABASE_URL")
+    else:
+        create_database_if_not_exists()
     create_users_table()
     create_jobs_table()
     create_user_ai_calls_table()

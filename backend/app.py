@@ -68,9 +68,11 @@ def create_app() -> Flask:
     return app
 
 
+app = create_app()
+
+
 if __name__ == "__main__":
     # For local development only; in production use a WSGI server.
-    application = create_app()
     port = int(os.getenv("BACKEND_PORT", "5000"))
-    application.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=port)
 
