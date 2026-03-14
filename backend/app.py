@@ -1,7 +1,10 @@
 import os
 
-from flask import Flask, jsonify, request
 from dotenv import load_dotenv
+
+load_dotenv()
+
+from flask import Flask, jsonify, request
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 import sentry_sdk
@@ -12,7 +15,10 @@ from routes.jobs import jobs_bp
 from routes.ai import ai_bp
 
 
-limiter = Limiter(key_func=get_remote_address)
+limiter = Limiter(
+    key_func=get_remote_address,
+    storage_uri="memory://",
+)
 
 sentry_sdk.init(
     dsn=os.getenv("SENTRY_DSN", ""),
@@ -28,8 +34,6 @@ def create_app() -> Flask:
     Loads configuration from environment variables and
     registers blueprints and extensions.
     """
-    load_dotenv()
-
     app = Flask(__name__)
 
     # Secret key for sessions / JWT signing

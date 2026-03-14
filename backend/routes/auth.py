@@ -83,7 +83,8 @@ def register():
         )
 
         return jsonify({"message": "Registered successfully", "token": token}), 201
-    except Exception:  # pragma: no cover - simple error passthrough
+    except Exception as e:  # pragma: no cover - simple error passthrough
+        print(f"AUTH ERROR: {e}")
         if conn is not None:
             conn.rollback()
         return (
@@ -135,7 +136,8 @@ def login():
         )
 
         return jsonify({"token": token})
-    except Exception:  # pragma: no cover - simple error passthrough
+    except Exception as e:  # pragma: no cover - simple error passthrough
+        print(f"AUTH ERROR: {e}")
         return (
             jsonify({"error": "Failed to login."}),
             500,
