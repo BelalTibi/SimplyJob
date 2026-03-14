@@ -1,8 +1,7 @@
 Flask
 Flask-Cors
-psycopg2-binary==2.9.9
+psycopg2-binary
 python-dotenv
-google-genai
 Flask-Bcrypt
 PyJWT
 Flask-Limiter
