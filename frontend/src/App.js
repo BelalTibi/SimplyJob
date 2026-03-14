@@ -64,6 +64,13 @@ function formatDateDDMMYYYY(value) {
   return `${dd}/${mm}/${yyyy}`;
 }
 
+function isNetworkError(err) {
+  return err?.message === "Failed to fetch" || err?.name === "TypeError";
+}
+
+const CONNECTION_ERROR_MSG =
+  "Connection failed. Please check your internet and try again.";
+
 function App() {
   const [token, setToken] = useState(() => getStoredToken());
   const [darkMode, setDarkMode] = useState(() => {
@@ -108,6 +115,7 @@ function App() {
     priority: "Medium",
   });
   const [urlError, setUrlError] = useState(null);
+  const [appliedDateError, setAppliedDateError] = useState(null);
   const [cvModalOpen, setCvModalOpen] = useState(false);
   const [cvFileName, setCvFileName] = useState("");
   const [cvUploadSuccess, setCvUploadSuccess] = useState(false);
@@ -166,7 +174,7 @@ function App() {
       })
       .catch((err) => {
         console.error("Error loading jobs", err);
-        setError(err.message || "Failed to load jobs.");
+        setError(isNetworkError(err) ? CONNECTION_ERROR_MSG : (err.message || "Could not load jobs. Please try again."));
       })
       .finally(() => {
         setLoading(false);
@@ -221,6 +229,42 @@ function App() {
     fetchJobs();
   }, [token, fetchJobs]);
 
+  useEffect(() => {
+    if (!authError) return;
+    const t = setTimeout(() => setAuthError(null), 5000);
+    return () => clearTimeout(t);
+  }, [authError]);
+  useEffect(() => {
+    if (!error) return;
+    const t = setTimeout(() => setError(null), 5000);
+    return () => clearTimeout(t);
+  }, [error]);
+  useEffect(() => {
+    if (!urlError) return;
+    const t = setTimeout(() => setUrlError(null), 5000);
+    return () => clearTimeout(t);
+  }, [urlError]);
+  useEffect(() => {
+    if (!appliedDateError) return;
+    const t = setTimeout(() => setAppliedDateError(null), 5000);
+    return () => clearTimeout(t);
+  }, [appliedDateError]);
+  useEffect(() => {
+    if (!cvError) return;
+    const t = setTimeout(() => setCvError(null), 5000);
+    return () => clearTimeout(t);
+  }, [cvError]);
+  useEffect(() => {
+    if (!cvFeedbackError) return;
+    const t = setTimeout(() => setCvFeedbackError(null), 5000);
+    return () => clearTimeout(t);
+  }, [cvFeedbackError]);
+  useEffect(() => {
+    if (!aiError) return;
+    const t = setTimeout(() => setAiError(null), 5000);
+    return () => clearTimeout(t);
+  }, [aiError]);
+
   const handleAuthSubmit = (event) => {
     event.preventDefault();
     setAuthError(null);
@@ -274,7 +318,11 @@ function App() {
       .then(async (res) => {
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
-          throw new Error(data.error || "Authentication failed.");
+          let msg = data.error || "Authentication failed.";
+          if (res.status === 401) msg = "Invalid email or password.";
+          else if (/already registered|already exists/i.test(msg)) msg = "Email already registered.";
+          else if (/password|8 characters|uppercase|number|match/i.test(msg)) msg = "Password does not meet requirements.";
+          throw new Error(msg);
         }
         return data;
       })
@@ -294,7 +342,7 @@ function App() {
         setAuthConfirmPassword("");
       })
       .catch((err) => {
-        setAuthError(err.message || "Authentication failed.");
+        setAuthError(isNetworkError(err) ? CONNECTION_ERROR_MSG : (err.message || "Authentication failed."));
       });
   };
 
@@ -336,6 +384,9 @@ function App() {
     if (name === "url") {
       setUrlError(null);
     }
+    if (name === "applied_date") {
+      setAppliedDateError(null);
+    }
   };
 
   const resetForm = () => {
@@ -371,11 +422,21 @@ function App() {
       }
     }
 
+    const appliedDateVal = formValues.applied_date?.trim();
+    if (appliedDateVal) {
+      const y = parseInt(appliedDateVal.slice(0, 4), 10);
+      if (Number.isNaN(y) || y < 2000 || y > 2030) {
+        setAppliedDateError("Please enter a valid date");
+        return;
+      }
+    }
+    setAppliedDateError(null);
+
     const payload = {
       title: formValues.title.trim(),
       company: formValues.company.trim(),
       status: formValues.status,
-      applied_date: formValues.applied_date || undefined,
+      applied_date: appliedDateVal || undefined,
       notes: formValues.notes.trim() || undefined,
       url: trimmedUrl || undefined,
       priority: formValues.priority,
@@ -400,7 +461,7 @@ function App() {
       .then(async (res) => {
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
-          throw new Error(data.error || "Failed to create job.");
+          throw new Error(data.error || "Failed to save job. Please try again.");
         }
         return data;
       })
@@ -411,7 +472,7 @@ function App() {
         fetchJobs();
       })
       .catch((err) => {
-        setError(err.message || "Failed to create job.");
+        setError(isNetworkError(err) ? CONNECTION_ERROR_MSG : (err.message || "Failed to save job. Please try again."));
         setSubmitting(false);
       });
   };
@@ -439,7 +500,7 @@ function App() {
       .then(async (res) => {
         if (!res.ok && res.status !== 204) {
           const text = await res.text();
-          throw new Error(text || "Failed to delete job.");
+          throw new Error(text || "Failed to delete job. Please try again.");
         }
       })
       .then(() => {
@@ -447,7 +508,7 @@ function App() {
         setDeletingId(null);
       })
       .catch((err) => {
-        setError(err.message || "Failed to delete job.");
+        setError(isNetworkError(err) ? CONNECTION_ERROR_MSG : (err.message || "Failed to delete job. Please try again."));
         setDeletingId(null);
       });
   };
@@ -475,7 +536,7 @@ function App() {
       .then(async (res) => {
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
-          throw new Error(data.error || "Failed to update job.");
+          throw new Error(data.error || "Failed to update job. Please try again.");
         }
         return data;
       })
@@ -486,7 +547,7 @@ function App() {
         setUpdatingId(null);
       })
       .catch((err) => {
-        setError(err.message || "Failed to update job.");
+        setError(isNetworkError(err) ? CONNECTION_ERROR_MSG : (err.message || "Failed to update job. Please try again."));
         setUpdatingId(null);
       });
   };
@@ -572,7 +633,7 @@ function App() {
       .then(async (res) => {
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
-          throw new Error(data.error || "Failed to update job.");
+          throw new Error(data.error || "Failed to update job. Please try again.");
         }
         return data;
       })
@@ -584,7 +645,7 @@ function App() {
         setEditingJobId(null);
       })
       .catch((err) => {
-        setError(err.message || "Failed to update job.");
+        setError(isNetworkError(err) ? CONNECTION_ERROR_MSG : (err.message || "Failed to update job. Please try again."));
         setUpdatingId(null);
       });
   };
@@ -682,7 +743,7 @@ function App() {
 
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error(data.error || "Failed to upload CV.");
+        throw new Error(data.error || "Failed to upload CV. Please try again.");
       }
 
       const text = data.cv_text || "";
@@ -697,7 +758,7 @@ function App() {
       setCvUploadSuccess(true);
       setHasCvText(text.trim().length > 0);
     } catch (err) {
-      setCvError(err.message || "Failed to upload CV.");
+      setCvError(isNetworkError(err) ? CONNECTION_ERROR_MSG : (err.message || "Failed to upload CV. Please try again."));
     } finally {
       setCvUploading(false);
     }
@@ -803,6 +864,7 @@ function App() {
     }
 
     if (!storedCv.trim()) {
+      setAiError("Please upload your CV first");
       setAiLoading(false);
       return;
     }
@@ -835,11 +897,9 @@ function App() {
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
           if (res.status === 429) {
-            throw new Error(
-              "Daily limit reached (3/3). Resets tomorrow."
-            );
+            throw new Error("Daily limit reached (3/3). Resets tomorrow.");
           }
-          throw new Error(data.error || "Failed to get AI feedback.");
+          throw new Error(data.error || "Failed to generate feedback. Please try again.");
         }
         return data;
       })
@@ -872,7 +932,7 @@ function App() {
         setAiLoading(false);
       })
       .catch((err) => {
-        setAiError(err.message || "Failed to get AI feedback.");
+        setAiError(isNetworkError(err) ? CONNECTION_ERROR_MSG : (err.message || "Failed to generate feedback. Please try again."));
         setAiLoading(false);
       });
   };
@@ -895,7 +955,7 @@ function App() {
     }
 
     if (!storedCv.trim()) {
-      setCvFeedbackError("No CV uploaded yet.");
+      setCvFeedbackError("Please upload your CV first");
       return;
     }
 
@@ -920,11 +980,9 @@ function App() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         if (res.status === 429) {
-          throw new Error(
-            "You've used your daily CV review. Resets tomorrow."
-          );
+          throw new Error("Daily limit reached (3/3). Resets tomorrow.");
         }
-        throw new Error(data.error || "Failed to get CV feedback.");
+        throw new Error(data.error || "Failed to generate feedback. Please try again.");
       }
 
       setCvFeedback(data.feedback || "");
@@ -937,7 +995,7 @@ function App() {
         cv_feedback_available: prev.is_admin ? true : false,
       }));
     } catch (err) {
-      setCvFeedbackError(err.message || "Failed to get CV feedback.");
+      setCvFeedbackError(isNetworkError(err) ? CONNECTION_ERROR_MSG : (err.message || "Failed to generate feedback. Please try again."));
     } finally {
       setCvFeedbackLoading(false);
     }
@@ -1138,7 +1196,12 @@ function App() {
                     {isLogin ? "Login" : "Register"}
                   </button>
                 </div>
-                {authError && <div className="error-text">{authError}</div>}
+                {authError && (
+                  <div className="error-text error-text-dismiss">
+                    {authError}
+                    <button type="button" className="error-dismiss" onClick={() => setAuthError(null)} aria-label="Close">✕</button>
+                  </div>
+                )}
               </form>
               <div className="helper-text" style={{ marginTop: 10 }}>
                 {isLogin ? (
@@ -1617,9 +1680,24 @@ function App() {
                     name="applied_date"
                     type="date"
                     className="field-input"
+                    min="2000-01-01"
+                    max="2030-12-31"
                     value={formValues.applied_date}
                     onChange={handleFormChange}
                   />
+                  {appliedDateError && (
+                    <div className="error-text error-text-dismiss">
+                      {appliedDateError}
+                      <button
+                        type="button"
+                        className="error-dismiss"
+                        onClick={() => setAppliedDateError(null)}
+                        aria-label="Close"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1654,7 +1732,12 @@ function App() {
                   value={formValues.url}
                   onChange={handleFormChange}
                 />
-                {urlError && <div className="error-text">{urlError}</div>}
+                {urlError && (
+                  <div className="error-text error-text-dismiss">
+                    {urlError}
+                    <button type="button" className="error-dismiss" onClick={() => setUrlError(null)} aria-label="Close">✕</button>
+                  </div>
+                )}
               </div>
 
               <div className="field">
@@ -1689,7 +1772,12 @@ function App() {
                 </button>
               </div>
 
-              {error && <div className="error-text">{error}</div>}
+              {error && (
+                <div className="error-text error-text-dismiss">
+                  {error}
+                  <button type="button" className="error-dismiss" onClick={() => setError(null)} aria-label="Close">✕</button>
+                </div>
+              )}
             </form>
           </section>
         </main>
@@ -1732,7 +1820,12 @@ function App() {
               {cvUploadSuccess && (
                 <div className="cv-saved">CV uploaded successfully</div>
               )}
-              {cvError && <div className="error-text">{cvError}</div>}
+              {cvError && (
+                <div className="error-text error-text-dismiss">
+                  {cvError}
+                  <button type="button" className="error-dismiss" onClick={() => setCvError(null)} aria-label="Close">✕</button>
+                </div>
+              )}
               <div className="form-footer" style={{ gap: 8 }}>
                 <button
                   type="button"
@@ -1752,7 +1845,10 @@ function App() {
                 </button>
               </div>
               {cvFeedbackError && (
-                <div className="error-text">{cvFeedbackError}</div>
+                <div className="error-text error-text-dismiss">
+                  {cvFeedbackError}
+                  <button type="button" className="error-dismiss" onClick={() => setCvFeedbackError(null)} aria-label="Close">✕</button>
+                </div>
               )}
               <div className="cv-last-review-row" style={{ marginTop: 16 }}>
                 {lastCvFeedbackDate ? (
@@ -1839,7 +1935,10 @@ function App() {
                         </div>
                       )}
                       {aiError && (
-                        <div className="error-text">{aiError}</div>
+                        <div className="error-text error-text-dismiss">
+                          {aiError}
+                          <button type="button" className="error-dismiss" onClick={() => setAiError(null)} aria-label="Close">✕</button>
+                        </div>
                       )}
                       {!aiLoading && aiFeedback && (
                         <>

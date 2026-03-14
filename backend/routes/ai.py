@@ -213,66 +213,7 @@ def extract_cv():
     if not file.filename.lower().endswith(".pdf"):
         return jsonify({"error": "Only PDF files are supported."}), 400
 
-    conn = None
-    cur = None
     try:
-        conn = get_db_connection()
-        cur = conn.cursor()
-
-        print(f"Checking limits for user_id: {g.current_user_id}")
-
-        cur.execute(
-            "SELECT email FROM users WHERE id = %s;",
-            (g.current_user_id,),
-        )
-        user_row = cur.fetchone()
-        user_email = (user_row["email"] if user_row else "") or ""
-        is_admin = user_email in ADMIN_EMAILS
-
-        if not is_admin:
-            # Enforce 1 CV-related operation per user per day via cv_call_date
-            cur.execute(
-                """
-                SELECT cv_call_date
-                FROM user_ai_calls
-                WHERE user_id = %s
-                FOR UPDATE;
-                """,
-                (g.current_user_id,),
-            )
-            row = cur.fetchone()
-
-            today = date.today()
-            if row and row.get("cv_call_date") == today:
-                return (
-                    jsonify(
-                        {
-                            "error": "Daily CV feedback limit reached (1/1). Resets tomorrow."
-                        }
-                    ),
-                    429,
-                )
-
-            if row:
-                cur.execute(
-                    """
-                    UPDATE user_ai_calls
-                    SET cv_call_date = CURRENT_DATE
-                    WHERE user_id = %s;
-                    """,
-                    (g.current_user_id,),
-                )
-            else:
-                cur.execute(
-                    """
-                    INSERT INTO user_ai_calls (user_id, call_date, call_count, cv_call_date)
-                    VALUES (%s, CURRENT_DATE, 0, CURRENT_DATE);
-                    """,
-                    (g.current_user_id,),
-                )
-
-            conn.commit()
-
         reader = PdfReader(file)
         text_parts = []
         for page in reader.pages:
@@ -285,8 +226,6 @@ def extract_cv():
 
         return jsonify({"cv_text": cv_text})
     except Exception as exc:  # pylint: disable=broad-except
-        if conn is not None:
-            conn.rollback()
         print(f"PDF extract error: {exc}")
         return (
             jsonify(
@@ -296,11 +235,6 @@ def extract_cv():
             ),
             500,
         )
-    finally:
-        if cur is not None:
-            cur.close()
-        if conn is not None:
-            conn.close()
 
 
 @ai_bp.post("/cv-feedback")
