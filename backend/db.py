@@ -24,6 +24,7 @@ def get_db_connection():
             conn = psycopg2.connect(
                 database_url,
                 cursor_factory=psycopg2.extras.RealDictCursor,
+                sslmode='require'
             )
         else:
             conn = psycopg2.connect(
