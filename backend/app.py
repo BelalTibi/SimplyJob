@@ -41,12 +41,17 @@ def create_app() -> Flask:
     app.config["ENV"] = os.getenv("FLASK_ENV", "development")
     app.config["DEBUG"] = os.getenv("FLASK_DEBUG", "0") == "1"
 
-    @app.after_request
-    def add_cors_headers(response):
-        allowed_origins = [
+    def get_allowed_origins():
+        origins = [
+            "https://simply-job-tracker.vercel.app",
             "http://localhost:3000",
             os.getenv("FRONTEND_ORIGIN", ""),
         ]
+        return [o for o in origins if o]
+
+    @app.after_request
+    def add_cors_headers(response):
+        allowed_origins = get_allowed_origins()
         origin = request.headers.get("Origin", "")
         if origin in allowed_origins:
             response.headers["Access-Control-Allow-Origin"] = origin
@@ -63,10 +68,7 @@ def create_app() -> Flask:
     def handle_preflight():
         if request.method == "OPTIONS":
             response = app.make_default_options_response()
-            allowed_origins = [
-                "http://localhost:3000",
-                os.getenv("FRONTEND_ORIGIN", ""),
-            ]
+            allowed_origins = get_allowed_origins()
             origin = request.headers.get("Origin", "")
             if origin in allowed_origins:
                 response.headers["Access-Control-Allow-Origin"] = origin
