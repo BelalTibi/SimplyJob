@@ -2139,7 +2139,11 @@ function App() {
             </div>
           </div>
         )}
+      <div className="preload-hidden" aria-hidden="true">
+        <img src={logoLight} alt="" />
+        <img src={logoDark} alt="" />
       </div>
+    </div>
     </>
   );
 }
