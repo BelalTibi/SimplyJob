@@ -224,6 +224,26 @@ def extract_cv():
         if not cv_text:
             return jsonify({"error": "Could not extract text from PDF."}), 400
 
+        conn = None
+        cur = None
+        try:
+            conn = get_db_connection()
+            cur = conn.cursor()
+            cur.execute(
+                """
+                UPDATE users
+                SET cv_text = %s, cv_filename = %s
+                WHERE id = %s;
+                """,
+                (cv_text, file.filename or "", g.current_user_id),
+            )
+            conn.commit()
+        finally:
+            if cur is not None:
+                cur.close()
+            if conn is not None:
+                conn.close()
+
         return jsonify({"cv_text": cv_text})
     except Exception as exc:  # pylint: disable=broad-except
         print(f"PDF extract error: {exc}")
@@ -412,6 +432,83 @@ def get_cv_feedback():
         print(f"Get CV feedback error: {exc}")
         return (
             jsonify({"error": "Failed to load CV feedback."}),
+            500,
+        )
+    finally:
+        if cur is not None:
+            cur.close()
+        if conn is not None:
+            conn.close()
+
+
+@ai_bp.get("/cv-text")
+@token_required
+def get_cv_text():
+    """Return the current user's stored CV text and filename (for restore on login/load)."""
+    conn = None
+    cur = None
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT cv_text, cv_filename
+            FROM users
+            WHERE id = %s;
+            """,
+            (g.current_user_id,),
+        )
+        row = cur.fetchone()
+        cv_text = (row.get("cv_text") or "").strip() if row else ""
+        cv_filename = (row.get("cv_filename") or "") if row else ""
+        return jsonify({"cv_text": cv_text, "cv_filename": cv_filename})
+    except Exception as exc:  # pylint: disable=broad-except
+        print(f"Get CV text error: {exc}")
+        return (
+            jsonify({"error": "Failed to load CV."}),
+            500,
+        )
+    finally:
+        if cur is not None:
+            cur.close()
+        if conn is not None:
+            conn.close()
+
+
+@ai_bp.patch("/cv-text")
+@token_required
+def update_cv_text():
+    """Clear or update the user's stored CV text (e.g. on Remove CV)."""
+    payload = request.get_json(silent=True) or {}
+    cv_text = payload.get("cv_text")
+    cv_filename = payload.get("cv_filename")
+    if cv_text is None and cv_filename is None:
+        cv_text = None
+        cv_filename = None
+    else:
+        cv_text = (cv_text if cv_text is not None else "").strip()
+        cv_filename = (cv_filename if cv_filename is not None else "") or None
+    conn = None
+    cur = None
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE users
+            SET cv_text = %s, cv_filename = %s
+            WHERE id = %s;
+            """,
+            (cv_text if cv_text else None, cv_filename, g.current_user_id),
+        )
+        conn.commit()
+        return jsonify({"ok": True})
+    except Exception as exc:  # pylint: disable=broad-except
+        if conn is not None:
+            conn.rollback()
+        print(f"Update CV text error: {exc}")
+        return (
+            jsonify({"error": "Failed to update CV."}),
             500,
         )
     finally:

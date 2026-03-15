@@ -35,7 +35,7 @@
 - Auth: working (register with password requirements, auto-login, JWT in localStorage)
 - Jobs CRUD: working
 - Dark mode: working, persisted in localStorage
-- AI feature: enabled (Anthropic Claude via backend), CV uploaded as PDF, text stored in localStorage and used for feedback
+- AI feature: enabled (Anthropic Claude via backend). CV text is stored server-side on the user record (users.cv_text, users.cv_filename); extracted on PDF upload via POST /api/ai/extract-cv and restored on login/load via GET /api/ai/cv-text. Frontend may cache in localStorage; logout clears local cache and CV is re-fetched from the server on next login.
 - AI rate limits: 3 job-specific feedback requests per user/day, 1 CV-wide feedback per user/day (shared limit with CV extract)
 - Sorting: fixed — supports priority, status, title, applied date
 - Column order: fixed — JOB, PRIORITY, STATUS, APPLIED, NOTES, ACTIONS
@@ -48,7 +48,8 @@
 
 ## AI Behaviour Notes
 - Job feedback: per-job AI analysis, now cached in the frontend to avoid duplicate calls; cache can be refreshed manually, with "generated X minutes ago" metadata.
-- CV feedback: independent CV-wide review via `/api/ai/cv-feedback`, surfaced in a dedicated "CV Review" modal using the same formatted renderer as job feedback; last review is persisted on the user record and can be viewed later via GET `/api/ai/cv-feedback`.
+- CV text persistence: raw extracted CV text is stored on the user record (`users.cv_text`, `users.cv_filename`). POST `/api/ai/extract-cv` saves it after PDF extraction; GET `/api/ai/cv-text` returns it for restore on login/load; PATCH `/api/ai/cv-text` clears or updates it (e.g. when user clicks Remove CV).
+- CV feedback: independent CV-wide review via POST `/api/ai/cv-feedback` (and GET for saved review); last review is persisted on the user record (`users.cv_feedback`, `users.cv_feedback_date`) and can be viewed later via GET `/api/ai/cv-feedback`.
 - Usage tracking: `/api/ai/usage` returns per-user daily counts (`job_calls_remaining`, `cv_feedback_available`, `is_admin`) so the frontend can show remaining quota and admin "∞" state.
 - Admin bypass: emails in `ADMIN_EMAILS` (currently `["belaltibi@gmail.com"]`) skip all AI rate limits and always see `calls_remaining: 999`, plus an "Admin" badge in the UI.
 

@@ -93,6 +93,18 @@ def create_users_table():
             ADD COLUMN IF NOT EXISTS cv_feedback_date TIMESTAMP;
             """
         )
+        cur.execute(
+            """
+            ALTER TABLE users
+            ADD COLUMN IF NOT EXISTS cv_text TEXT;
+            """
+        )
+        cur.execute(
+            """
+            ALTER TABLE users
+            ADD COLUMN IF NOT EXISTS cv_filename VARCHAR(255);
+            """
+        )
         conn.commit()
         print("Table 'users' ensured (created/updated as needed).")
     finally:

@@ -240,6 +240,38 @@ function App() {
   }, [token, fetchJobs]);
 
   useEffect(() => {
+    if (!token) return;
+    const currentToken = getStoredToken();
+    if (!currentToken) return;
+    fetch(`${API_BASE}/api/ai/cv-text`, {
+      headers: { Authorization: `Bearer ${currentToken}` },
+    })
+      .then((res) => res.json().catch(() => ({})))
+      .then((data) => {
+        if (data.cv_text && data.cv_text.trim()) {
+          try {
+            localStorage.setItem("simplyjob_cv", data.cv_text);
+            localStorage.setItem("simplyjob_cv_filename", data.cv_filename || "");
+          } catch {
+            // ignore
+          }
+          setCvFileName(data.cv_filename || "");
+          setHasCvText(true);
+        } else {
+          try {
+            localStorage.removeItem("simplyjob_cv");
+            localStorage.removeItem("simplyjob_cv_filename");
+          } catch {
+            // ignore
+          }
+          setCvFileName("");
+          setHasCvText(false);
+        }
+      })
+      .catch(() => {});
+  }, [token]);
+
+  useEffect(() => {
     if (!authError) return;
     const t = setTimeout(() => setAuthError(null), 5000);
     return () => clearTimeout(t);
@@ -753,6 +785,17 @@ function App() {
   };
 
   const handleCvClear = () => {
+    const currentToken = getStoredToken();
+    if (currentToken) {
+      fetch(`${API_BASE}/api/ai/cv-text`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${currentToken}`,
+        },
+        body: JSON.stringify({ cv_text: "", cv_filename: "" }),
+      }).catch(() => {});
+    }
     try {
       localStorage.removeItem("simplyjob_cv");
       localStorage.removeItem("simplyjob_cv_filename");
