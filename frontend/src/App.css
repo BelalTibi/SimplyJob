@@ -78,6 +78,13 @@ body.dark .search-input::placeholder {
   color: #5a5f73;
 }
 
+body.dark input[type="date"] {
+  color-scheme: dark;
+}
+body.dark input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.8);
+}
+
 body.dark .status-Applied {
   background: #4b5563;
   color: white;
@@ -1098,6 +1105,134 @@ tbody tr {
   margin-top: 6px;
   font-size: 0.75rem;
   color: #16a34a;
+}
+
+@media (max-width: 768px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .app-header {
+    padding: 0 16px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .status-pill-row {
+    display: none;
+  }
+
+  .app-main {
+    padding: 72px 16px 16px;
+  }
+
+  .header-logo {
+    height: 36px;
+  }
+
+  .jobs-table thead {
+    display: none;
+  }
+
+  .jobs-table tbody tr {
+    display: block;
+    padding: 12px;
+    margin-bottom: 8px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+  }
+
+  .jobs-table tbody tr:hover {
+    background: var(--bg-card);
+  }
+
+  .jobs-table td {
+    display: block;
+    width: 100%;
+    padding: 6px 0;
+    border: none;
+  }
+
+  .jobs-table td:nth-child(1)::before {
+    content: "";
+  }
+
+  .jobs-table td:nth-child(2)::before {
+    content: "Priority: ";
+    font-weight: 500;
+  }
+
+  .jobs-table td:nth-child(3)::before {
+    content: "Status: ";
+    font-weight: 500;
+  }
+
+  .jobs-table td:nth-child(4)::before {
+    content: "Applied: ";
+    font-weight: 500;
+  }
+
+  .jobs-table td:nth-child(5)::before {
+    content: "Notes: ";
+    font-weight: 500;
+  }
+
+  .jobs-table td.actions-cell {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding-top: 10px;
+    margin-top: 6px;
+    border-top: 1px solid var(--border);
+  }
+
+  .jobs-table td.actions-cell::before {
+    display: none;
+  }
+
+  .modal {
+    max-width: 95vw;
+    max-height: 90vh;
+    padding: 16px;
+    overflow: auto;
+  }
+
+  .form-row {
+    flex-direction: column;
+  }
+
+  .form-row > .field {
+    width: 100%;
+  }
+
+  .field-input,
+  .field-select,
+  .field-textarea {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .btn {
+    min-height: 44px;
+  }
+
+  .btn-secondary,
+  .btn-delete,
+  .btn-ai,
+  .theme-toggle {
+    min-height: 44px;
+  }
+
+  .form-footer .btn,
+  .form-footer .btn-secondary {
+    width: 100%;
+  }
+
+  .app-header-right {
+    flex-wrap: wrap;
+  }
 }
 
 @keyframes fadeIn {

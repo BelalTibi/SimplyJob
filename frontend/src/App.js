@@ -127,7 +127,15 @@ function App() {
   const [aiError, setAiError] = useState(null);
   const [aiFeedback, setAiFeedback] = useState(null);
   const [aiCallsRemaining, setAiCallsRemaining] = useState(null);
-  const [aiCache, setAiCache] = useState({});
+  const [aiCache, setAiCache] = useState(() => {
+    try {
+      const s = localStorage.getItem("simplyjob_ai_cache");
+      if (!s) return {};
+      return JSON.parse(s);
+    } catch {
+      return {};
+    }
+  });
   const [cvFeedbackModalOpen, setCvFeedbackModalOpen] = useState(false);
   const [cvFeedbackLoading, setCvFeedbackLoading] = useState(false);
   const [cvFeedbackError, setCvFeedbackError] = useState(null);
@@ -331,7 +339,13 @@ function App() {
           throw new Error("No token returned from server.");
         }
         localStorage.setItem(TOKEN_KEY, data.token);
+        localStorage.removeItem("simplyjob_cv");
+        localStorage.removeItem("simplyjob_cv_filename");
+        localStorage.removeItem("simplyjob_ai_cache");
         setToken(data.token);
+        setCvFileName("");
+        setHasCvText(false);
+        setAiCache({});
         // reset AI usage on new login
         setAiUsage({
           job_calls_remaining: null,
@@ -349,6 +363,9 @@ function App() {
   const handleLogout = () => {
     try {
       localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem("simplyjob_cv");
+      localStorage.removeItem("simplyjob_cv_filename");
+      localStorage.removeItem("simplyjob_ai_cache");
     } catch {
       // ignore
     }
@@ -359,6 +376,14 @@ function App() {
     setAuthConfirmPassword("");
     setError(null);
     setAuthError(null);
+    setCvModalOpen(false);
+    setAiModalOpen(false);
+    setCvFeedbackModalOpen(false);
+    setCvFeedback(null);
+    setLastCvFeedbackDate(null);
+    setAiCache({});
+    setCvFileName("");
+    setHasCvText(false);
   };
 
   const handleFormChange = (event) => {
@@ -915,14 +940,22 @@ function App() {
           setAiCallsRemaining(callsRemainingValue);
         }
 
-        setAiCache((prev) => ({
-          ...prev,
-          [job.id]: {
-            feedback: feedbackText,
-            callsRemaining: callsRemainingValue,
-            lastUpdated: new Date(),
-          },
-        }));
+        setAiCache((prev) => {
+          const next = {
+            ...prev,
+            [job.id]: {
+              feedback: feedbackText,
+              callsRemaining: callsRemainingValue,
+              lastUpdated: new Date(),
+            },
+          };
+          try {
+            localStorage.setItem("simplyjob_ai_cache", JSON.stringify(next));
+          } catch {
+            // ignore
+          }
+          return next;
+        });
 
         setAiUsage((prev) => ({
           ...prev,
@@ -980,12 +1013,13 @@ function App() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         if (res.status === 429) {
-          throw new Error("Daily limit reached (3/3). Resets tomorrow.");
+          throw new Error("Daily CV review limit reached (1/1). Resets tomorrow.");
         }
         throw new Error(data.error || "Failed to generate feedback. Please try again.");
       }
 
       setCvFeedback(data.feedback || "");
+      setAiUsage((prev) => ({ ...prev, cv_feedback_available: false }));
       if (data.cv_feedback_date) {
         setLastCvFeedbackDate(new Date(data.cv_feedback_date));
       }
@@ -1839,7 +1873,7 @@ function App() {
                   type="button"
                   className="btn"
                   onClick={handleCvFeedback}
-                  disabled={!hasCvText || cvFeedbackLoading}
+                  disabled={!hasCvText || cvFeedbackLoading || (!aiUsage.is_admin && aiUsage.cv_feedback_available === false)}
                 >
                   {cvFeedbackLoading ? "Analysing your CV..." : "Get CV Feedback"}
                 </button>
