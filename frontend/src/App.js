@@ -75,9 +75,11 @@ function App() {
   const [token, setToken] = useState(() => getStoredToken());
   const [darkMode, setDarkMode] = useState(() => {
     try {
-      return localStorage.getItem(DARK_KEY) === "dark";
+      const stored = localStorage.getItem(DARK_KEY);
+      if (stored === null) return true;
+      return stored === "dark";
     } catch {
-      return false;
+      return true;
     }
   });
   const [authMode, setAuthMode] = useState("login"); // 'login' | 'register'
@@ -726,6 +728,30 @@ function App() {
     setCvModalOpen(false);
   };
 
+  const openCvReviewModal = () => {
+    const currentToken = getStoredToken();
+    if (!currentToken) return;
+    setCvFeedbackModalOpen(true);
+    fetch(`${API_BASE}/api/ai/cv-feedback`, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${currentToken}` },
+    })
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) return;
+        const feedbackText = data.feedback ?? data.cv_feedback ?? null;
+        const dateStr = data.cv_feedback_date ?? null;
+        if (feedbackText) {
+          setCvFeedback(feedbackText);
+          setLastCvFeedbackDate(dateStr ? new Date(dateStr) : null);
+        } else {
+          setCvFeedback(null);
+          setLastCvFeedbackDate(null);
+        }
+      })
+      .catch(() => {});
+  };
+
   const handleCvClear = () => {
     try {
       localStorage.removeItem("simplyjob_cv");
@@ -739,7 +765,7 @@ function App() {
     setCvError(null);
   };
 
-  const handleCvUpload = async (event) => {
+  const handleCvUpload = async (event, onSuccess) => {
     const file = event.target.files && event.target.files[0];
     if (!file) return;
 
@@ -782,6 +808,7 @@ function App() {
       setCvFileName(file.name);
       setCvUploadSuccess(true);
       setHasCvText(text.trim().length > 0);
+      if (typeof onSuccess === "function") onSuccess();
     } catch (err) {
       setCvError(isNetworkError(err) ? CONNECTION_ERROR_MSG : (err.message || "Failed to upload CV. Please try again."));
     } finally {
@@ -1301,10 +1328,17 @@ function App() {
             </button>
             <button
               type="button"
-              className="btn-secondary btn btn-cv"
+              className="btn btn-cv-prominent"
               onClick={openCvModal}
             >
               My CV
+            </button>
+            <button
+              type="button"
+              className="btn-secondary btn"
+              onClick={openCvReviewModal}
+            >
+              CV Review
             </button>
             <button
               type="button"
@@ -1945,16 +1979,38 @@ function App() {
                     return (
                       <>
                         <p className="modal-subtitle">No CV saved yet.</p>
-                        <button
-                          type="button"
-                          className="btn-secondary btn"
-                          onClick={() => {
-                            closeAiModal();
-                            openCvModal();
-                          }}
-                        >
-                          Add My CV
-                        </button>
+                        <div className="field" style={{ marginTop: 8 }}>
+                          <label className="field-label">Upload CV</label>
+                          <input
+                            type="file"
+                            accept=".pdf"
+                            onChange={(e) => {
+                              handleCvUpload(e, () => {
+                                if (aiJob) openAiModalForJob(aiJob);
+                              });
+                            }}
+                            disabled={cvUploading}
+                          />
+                          {cvUploading && (
+                            <div className="spinner-container" style={{ marginTop: 6 }}>
+                              <div className="spinner" />
+                              <span>Uploading…</span>
+                            </div>
+                          )}
+                        </div>
+                        <p className="helper-text" style={{ marginTop: 8 }}>
+                          or{" "}
+                          <button
+                            type="button"
+                            className="link-button"
+                            onClick={() => {
+                              closeAiModal();
+                              openCvModal();
+                            }}
+                          >
+                            manage your CV in My CV
+                          </button>
+                        </p>
                       </>
                     );
                   }
@@ -2040,27 +2096,45 @@ function App() {
                 </button>
               </div>
               <div className="modal-body">
-                {lastCvFeedbackDate && (
-                  <p className="cv-review-generated-date">
-                    Generated on {formatDateDDMMYYYY(lastCvFeedbackDate)}
-                  </p>
-                )}
-                {cvFeedback ? (
-                  <div className="ai-response-box">
-                    {renderFeedback(cvFeedback)}
-                  </div>
+                {!hasCvText ? (
+                  <>
+                    <p className="modal-subtitle">Upload your CV first using My CV.</p>
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() => {
+                        setCvFeedbackModalOpen(false);
+                        openCvModal();
+                      }}
+                    >
+                      My CV
+                    </button>
+                  </>
                 ) : (
-                  <p className="cv-no-review-yet">No review content to display.</p>
+                  <>
+                    {lastCvFeedbackDate && (
+                      <p className="cv-review-generated-date">
+                        Generated on {formatDateDDMMYYYY(lastCvFeedbackDate)}
+                      </p>
+                    )}
+                    {cvFeedback ? (
+                      <div className="ai-response-box">
+                        {renderFeedback(cvFeedback)}
+                      </div>
+                    ) : (
+                      <p className="cv-no-review-yet">No review content to display.</p>
+                    )}
+                    <div className="form-footer" style={{ marginTop: 16 }}>
+                      <button
+                        type="button"
+                        className="btn"
+                        onClick={() => setCvFeedbackModalOpen(false)}
+                      >
+                        Close
+                      </button>
+                    </div>
+                  </>
                 )}
-                <div className="form-footer" style={{ marginTop: 16 }}>
-                  <button
-                    type="button"
-                    className="btn"
-                    onClick={() => setCvFeedbackModalOpen(false)}
-                  >
-                    Close
-                  </button>
-                </div>
               </div>
             </div>
           </div>
