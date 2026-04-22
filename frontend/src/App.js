@@ -1300,6 +1300,10 @@ function App() {
                     {isLogin ? "Login" : "Register"}
                   </button>
                 </div>
+                <div className="helper-text auth-wake-note">
+                  If login or registration does not work immediately, please wait
+                  up to 50 seconds for the server to wake up.
+                </div>
                 {authError && (
                   <div className="error-text error-text-dismiss">
                     {authError}

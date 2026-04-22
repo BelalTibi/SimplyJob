@@ -42,9 +42,7 @@
 - Deployment: ready for Render (gunicorn Procfile, DATABASE_URL support, frontend REACT_APP_API_URL)
 
 ## Known Issues To Fix
-- Confirm Anthropic model + quota fit for production usage
-- Add better error messaging/UX around CV upload and AI failures
-- Consider separate limits for CV extract vs CV feedback if needed
+- None currently
 
 ## AI Behaviour Notes
 - Job feedback: per-job AI analysis, now cached in the frontend to avoid duplicate calls; cache can be refreshed manually, with "generated X minutes ago" metadata.
