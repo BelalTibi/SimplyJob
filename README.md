@@ -12,7 +12,7 @@ A full-stack job application tracker built with React, Flask, and PostgreSQL.
 
 - Inline editing of job details
 
-- JWT authentication — each user sees only their own data
+- JWT authentication: each user sees only their own data
 
 - Dark mode with localStorage persistence
 
