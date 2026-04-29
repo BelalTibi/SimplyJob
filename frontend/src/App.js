@@ -8,8 +8,8 @@ const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5000";
 const TOKEN_KEY = "simplyjob_token";
 const DARK_KEY = "simplyjob_dark_mode";
 const PRIORITIES = ["Low", "Medium", "High"];
-const MAX_NOTES_PREVIEW = 60;
 const ENABLE_LEGACY_EMAIL_PASSWORD_AUTH = false;
+const JOBS_TRACKED_FALLBACK = 457;
 
 function getStoredToken() {
   try {
@@ -90,6 +90,10 @@ function App() {
   const [authConfirmPassword, setAuthConfirmPassword] = useState("");
   const [authError, setAuthError] = useState(null);
   const [oauthLoading, setOauthLoading] = useState(false);
+  const [jobsTrackedCount, setJobsTrackedCount] = useState(
+    JOBS_TRACKED_FALLBACK
+  );
+  const [jobsTrackedLoaded, setJobsTrackedLoaded] = useState(false);
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -313,6 +317,64 @@ function App() {
       if (typeof unsub === "function") unsub();
     };
   }, []);
+
+  useEffect(() => {
+    if (token) return;
+    if (!supabase) return;
+
+    let pollId = null;
+    let channel = null;
+    let cancelled = false;
+
+    const refreshJobsTracked = async () => {
+      try {
+        const { count, error: countError } = await supabase
+          .from("jobs")
+          .select("*", { count: "exact", head: true });
+        if (cancelled) return;
+        if (countError || typeof count !== "number") return;
+        setJobsTrackedCount(count);
+        setJobsTrackedLoaded(true);
+      } catch {
+        // fail silently
+      }
+    };
+
+    refreshJobsTracked();
+
+    // Fallback polling (lightweight): keeps metric fresh even without realtime.
+    pollId = setInterval(refreshJobsTracked, 20000);
+
+    // Realtime refresh (only if supported/enabled).
+    try {
+      if (typeof supabase.channel === "function") {
+        channel = supabase
+          .channel("jobs-tracked-count")
+          .on(
+            "postgres_changes",
+            { event: "INSERT", schema: "public", table: "jobs" },
+            () => {
+              refreshJobsTracked();
+            }
+          )
+          .subscribe();
+      }
+    } catch {
+      // fail silently
+    }
+
+    return () => {
+      cancelled = true;
+      if (pollId) clearInterval(pollId);
+      try {
+        if (channel && typeof supabase.removeChannel === "function") {
+          supabase.removeChannel(channel);
+        }
+      } catch {
+        // ignore
+      }
+    };
+  }, [token]);
 
   const handleOAuthSignIn = async (provider) => {
     setAuthError(null);
@@ -994,8 +1056,8 @@ function App() {
         );
       }
 
-      if (/^\d+[\.\)]\s+/.test(trimmed)) {
-        const content = trimmed.replace(/^\d+[\.\)]\s+/, "");
+      if (/^\d+[.)]\s+/.test(trimmed)) {
+        const content = trimmed.replace(/^\d+[.)]\s+/, "");
         return (
           <div className="ai-feedback-list-item" key={`num-${index}`}>
             • {formatInline(content)}
@@ -1311,22 +1373,97 @@ function App() {
               >
                 {!ENABLE_LEGACY_EMAIL_PASSWORD_AUTH ? (
                   <>
-                    <button
-                      type="button"
-                      className="btn"
-                      onClick={() => handleOAuthSignIn("google")}
-                      disabled={oauthLoading}
-                    >
-                      {oauthLoading ? "Opening Google…" : "Sign in with Google"}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      onClick={() => handleOAuthSignIn("github")}
-                      disabled={oauthLoading}
-                    >
-                      {oauthLoading ? "Opening GitHub…" : "Sign in with GitHub"}
-                    </button>
+                    <div className="oauth-label">Sign in with:</div>
+                    <div className="oauth-buttons">
+                      <button
+                        type="button"
+                        className="oauth-btn oauth-google"
+                        onClick={() => handleOAuthSignIn("google")}
+                        disabled={oauthLoading}
+                        aria-label="Sign in with Google"
+                      >
+                        <span className="oauth-icon" aria-hidden="true">
+                          <svg
+                            width="18"
+                            height="18"
+                            viewBox="0 0 48 48"
+                            xmlns="http://www.w3.org/2000/svg"
+                          >
+                            <path
+                              fill="#EA4335"
+                              d="M24 9.5c3.5 0 6.6 1.2 9.1 3.4l6.8-6.8C35.8 2.4 30.2 0 24 0 14.6 0 6.5 5.4 2.6 13.3l7.9 6.1C12.3 13.4 17.7 9.5 24 9.5z"
+                            />
+                            <path
+                              fill="#4285F4"
+                              d="M46.5 24.5c0-1.7-.2-3.3-.5-4.9H24v9.3h12.6c-.5 2.9-2.1 5.3-4.5 6.9l7 5.4c4.1-3.8 6.4-9.4 6.4-16.7z"
+                            />
+                            <path
+                              fill="#FBBC05"
+                              d="M10.5 28.6c-.5-1.5-.8-3.1-.8-4.6s.3-3.2.8-4.6l-7.9-6.1C.9 16.7 0 20.2 0 24c0 3.8.9 7.3 2.6 10.7l7.9-6.1z"
+                            />
+                            <path
+                              fill="#34A853"
+                              d="M24 48c6.2 0 11.4-2 15.2-5.5l-7-5.4c-2 1.3-4.5 2.1-8.2 2.1-6.3 0-11.7-3.9-13.6-9.4l-7.9 6.1C6.5 42.6 14.6 48 24 48z"
+                            />
+                          </svg>
+                        </span>
+                        <span className="oauth-text">
+                          {oauthLoading ? "Opening…" : "Google"}
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        className="oauth-btn oauth-github"
+                        onClick={() => handleOAuthSignIn("github")}
+                        disabled={oauthLoading}
+                        aria-label="Sign in with GitHub"
+                      >
+                        <span className="oauth-icon" aria-hidden="true">
+                          <svg
+                            width="18"
+                            height="18"
+                            viewBox="0 0 24 24"
+                            xmlns="http://www.w3.org/2000/svg"
+                          >
+                            <path
+                              fill="currentColor"
+                              d="M12 .5C5.73.5.7 5.63.7 12.03c0 5.12 3.29 9.46 7.86 11 .58.11.79-.26.79-.57v-2.18c-3.2.71-3.87-1.58-3.87-1.58-.52-1.36-1.27-1.72-1.27-1.72-1.04-.73.08-.72.08-.72 1.15.08 1.75 1.22 1.75 1.22 1.02 1.79 2.68 1.27 3.33.97.1-.76.4-1.27.72-1.56-2.55-.3-5.23-1.31-5.23-5.84 0-1.29.44-2.35 1.16-3.18-.12-.3-.5-1.52.11-3.16 0 0 .95-.31 3.11 1.21.9-.26 1.86-.39 2.82-.39.96 0 1.92.13 2.82.39 2.16-1.52 3.11-1.21 3.11-1.21.61 1.64.23 2.86.11 3.16.72.83 1.16 1.89 1.16 3.18 0 4.54-2.69 5.53-5.25 5.83.41.36.78 1.09.78 2.2v3.26c0 .31.21.68.79.57 4.57-1.54 7.86-5.88 7.86-11C23.3 5.63 18.27.5 12 .5z"
+                            />
+                          </svg>
+                        </span>
+                        <span className="oauth-text">
+                          {oauthLoading ? "Opening…" : "GitHub"}
+                        </span>
+                      </button>
+                    </div>
+
+                    <div className="auth-metric-card" aria-hidden="true">
+                      <div className="auth-metric-top">
+                        <div className="auth-metric-icon" aria-hidden="true">
+                          <svg
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            xmlns="http://www.w3.org/2000/svg"
+                          >
+                            <path
+                              fill="currentColor"
+                              d="M10 4h4a2 2 0 0 1 2 2v1h4a2 2 0 0 1 2 2v3H2V9a2 2 0 0 1 2-2h4V6a2 2 0 0 1 2-2Zm4 3V6h-4v1h4Zm12 7v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-6h9v2h2v-2h9Z"
+                            />
+                          </svg>
+                        </div>
+                        <div className="auth-metric-value">
+                          {typeof jobsTrackedCount === "number"
+                            ? jobsTrackedCount.toLocaleString()
+                            : JOBS_TRACKED_FALLBACK.toLocaleString()}
+                        </div>
+                      </div>
+                      <div className="auth-metric-label">
+                        Jobs tracked
+                        {!jobsTrackedLoaded ? "" : ""}
+                      </div>
+                    </div>
                   </>
                 ) : (
                   <>
