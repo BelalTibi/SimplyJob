@@ -2,12 +2,14 @@ import React, { useCallback, useEffect, useState } from "react";
 import "./App.css";
 import logoLight from "./logo-light.png";
 import logoDark from "./logo-dark.png";
+import { supabase } from "./supabaseClient";
 
 const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5000";
 const TOKEN_KEY = "simplyjob_token";
 const DARK_KEY = "simplyjob_dark_mode";
 const PRIORITIES = ["Low", "Medium", "High"];
 const MAX_NOTES_PREVIEW = 60;
+const ENABLE_LEGACY_EMAIL_PASSWORD_AUTH = false;
 
 function getStoredToken() {
   try {
@@ -87,6 +89,7 @@ function App() {
   const [authPassword, setAuthPassword] = useState("");
   const [authConfirmPassword, setAuthConfirmPassword] = useState("");
   const [authError, setAuthError] = useState(null);
+  const [oauthLoading, setOauthLoading] = useState(false);
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -272,6 +275,68 @@ function App() {
   }, [token]);
 
   useEffect(() => {
+    if (!supabase) return;
+
+    let unsub = null;
+
+    supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        const accessToken = data?.session?.access_token || null;
+        if (accessToken) {
+          try {
+            localStorage.setItem(TOKEN_KEY, accessToken);
+          } catch {
+            // ignore
+          }
+          setToken(accessToken);
+        }
+      })
+      .catch(() => {});
+
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        const accessToken = session?.access_token || null;
+        if (accessToken) {
+          try {
+            localStorage.setItem(TOKEN_KEY, accessToken);
+          } catch {
+            // ignore
+          }
+          setToken(accessToken);
+        }
+      }
+    );
+    unsub = listener?.subscription?.unsubscribe;
+
+    return () => {
+      if (typeof unsub === "function") unsub();
+    };
+  }, []);
+
+  const handleOAuthSignIn = async (provider) => {
+    setAuthError(null);
+    if (!supabase) {
+      setAuthError(
+        "OAuth is not configured. Missing REACT_APP_SUPABASE_URL / REACT_APP_SUPABASE_ANON_KEY."
+      );
+      return;
+    }
+
+    setOauthLoading(true);
+    try {
+      const { error: signInError } = await supabase.auth.signInWithOAuth({
+        provider,
+      });
+      if (signInError) throw signInError;
+    } catch (err) {
+      setAuthError(err?.message || "OAuth sign-in failed.");
+    } finally {
+      setOauthLoading(false);
+    }
+  };
+
+  useEffect(() => {
     if (!authError) return;
     const t = setTimeout(() => setAuthError(null), 5000);
     return () => clearTimeout(t);
@@ -310,6 +375,11 @@ function App() {
   const handleAuthSubmit = (event) => {
     event.preventDefault();
     setAuthError(null);
+
+    if (!ENABLE_LEGACY_EMAIL_PASSWORD_AUTH) {
+      setAuthError("Email/password sign-in is currently disabled.");
+      return;
+    }
 
     const trimmedEmail = authEmail.trim();
     const password = authPassword;
@@ -418,6 +488,18 @@ function App() {
     setAiCache({});
     setCvFileName("");
     setHasCvText(false);
+  };
+
+  const handleLogoutAll = async () => {
+    try {
+      if (supabase) {
+        await supabase.auth.signOut();
+      }
+    } catch {
+      // ignore
+    } finally {
+      handleLogout();
+    }
   };
 
   const handleFormChange = (event) => {
@@ -1219,87 +1301,119 @@ function App() {
                   {isLogin ? "Login" : "Create an account"}
                 </h2>
               </div>
-              <form className="form" onSubmit={handleAuthSubmit}>
-                <div className="field">
-                  <label className="field-label" htmlFor="auth-email">
-                    Email
-                  </label>
-                  <input
-                    id="auth-email"
-                    name="auth-email"
-                    type="email"
-                    className="field-input"
-                    value={authEmail}
-                    onChange={(e) => setAuthEmail(e.target.value)}
-                    placeholder="you@example.com"
-                  />
-                </div>
-                <div className="field">
-                  <label className="field-label" htmlFor="auth-password">
-                    Password
-                  </label>
-                  <input
-                    id="auth-password"
-                    name="auth-password"
-                    type="password"
-                    className="field-input"
-                    value={authPassword}
-                    onChange={(e) => setAuthPassword(e.target.value)}
-                    placeholder="••••••••"
-                  />
-                </div>
-                {authMode === "register" && (
+              <form
+                className="form"
+                onSubmit={
+                  ENABLE_LEGACY_EMAIL_PASSWORD_AUTH
+                    ? handleAuthSubmit
+                    : (e) => e.preventDefault()
+                }
+              >
+                {!ENABLE_LEGACY_EMAIL_PASSWORD_AUTH ? (
+                  <>
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() => handleOAuthSignIn("google")}
+                      disabled={oauthLoading}
+                    >
+                      {oauthLoading ? "Opening Google…" : "Sign in with Google"}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() => handleOAuthSignIn("github")}
+                      disabled={oauthLoading}
+                    >
+                      {oauthLoading ? "Opening GitHub…" : "Sign in with GitHub"}
+                    </button>
+                  </>
+                ) : (
                   <>
                     <div className="field">
-                      <label className="field-label" htmlFor="auth-confirm">
-                        Confirm password
+                      <label className="field-label" htmlFor="auth-email">
+                        Email
                       </label>
                       <input
-                        id="auth-confirm"
-                        name="auth-confirm"
-                        type="password"
+                        id="auth-email"
+                        name="auth-email"
+                        type="email"
                         className="field-input"
-                        value={authConfirmPassword}
-                        onChange={(e) => setAuthConfirmPassword(e.target.value)}
-                        placeholder="Repeat your password"
+                        value={authEmail}
+                        onChange={(e) => setAuthEmail(e.target.value)}
+                        placeholder="you@example.com"
                       />
                     </div>
-                    <div className="password-checklist">
-                      <div
-                        className={
-                          authPassword.length >= 8
-                            ? "password-check-item ok"
-                            : "password-check-item"
-                        }
-                      >
-                        At least 8 characters
-                      </div>
-                      <div
-                        className={
-                          /[A-Z]/.test(authPassword)
-                            ? "password-check-item ok"
-                            : "password-check-item"
-                        }
-                      >
-                        At least one uppercase letter
-                      </div>
-                      <div
-                        className={
-                          /\d/.test(authPassword)
-                            ? "password-check-item ok"
-                            : "password-check-item"
-                        }
-                      >
-                        At least one number
-                      </div>
+                    <div className="field">
+                      <label className="field-label" htmlFor="auth-password">
+                        Password
+                      </label>
+                      <input
+                        id="auth-password"
+                        name="auth-password"
+                        type="password"
+                        className="field-input"
+                        value={authPassword}
+                        onChange={(e) => setAuthPassword(e.target.value)}
+                        placeholder="••••••••"
+                      />
+                    </div>
+                    {authMode === "register" && (
+                      <>
+                        <div className="field">
+                          <label className="field-label" htmlFor="auth-confirm">
+                            Confirm password
+                          </label>
+                          <input
+                            id="auth-confirm"
+                            name="auth-confirm"
+                            type="password"
+                            className="field-input"
+                            value={authConfirmPassword}
+                            onChange={(e) =>
+                              setAuthConfirmPassword(e.target.value)
+                            }
+                            placeholder="Repeat your password"
+                          />
+                        </div>
+                        <div className="password-checklist">
+                          <div
+                            className={
+                              authPassword.length >= 8
+                                ? "password-check-item ok"
+                                : "password-check-item"
+                            }
+                          >
+                            At least 8 characters
+                          </div>
+                          <div
+                            className={
+                              /[A-Z]/.test(authPassword)
+                                ? "password-check-item ok"
+                                : "password-check-item"
+                            }
+                          >
+                            At least one uppercase letter
+                          </div>
+                          <div
+                            className={
+                              /\d/.test(authPassword)
+                                ? "password-check-item ok"
+                                : "password-check-item"
+                            }
+                          >
+                            At least one number
+                          </div>
+                        </div>
+                      </>
+                    )}
+                    <div className="form-footer">
+                      <button type="submit" className="btn">
+                        {isLogin ? "Login" : "Register"}
+                      </button>
                     </div>
                   </>
                 )}
-                <div className="form-footer">
-                  <button type="submit" className="btn">
-                    {isLogin ? "Login" : "Register"}
-                  </button>
-                </div>
                 <div className="helper-text auth-wake-note">
                   If login or registration does not work immediately, please wait
                   up to 50 seconds for the server to wake up.
@@ -1307,41 +1421,50 @@ function App() {
                 {authError && (
                   <div className="error-text error-text-dismiss">
                     {authError}
-                    <button type="button" className="error-dismiss" onClick={() => setAuthError(null)} aria-label="Close">✕</button>
+                    <button
+                      type="button"
+                      className="error-dismiss"
+                      onClick={() => setAuthError(null)}
+                      aria-label="Close"
+                    >
+                      ✕
+                    </button>
                   </div>
                 )}
               </form>
-              <div className="helper-text" style={{ marginTop: 10 }}>
-                {isLogin ? (
-                  <>
-                    Need an account?{" "}
-                    <button
-                      type="button"
-                      className="link-button"
-                      onClick={() => {
-                        setAuthMode("register");
-                        setAuthError(null);
-                      }}
-                    >
-                      Register
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    Already have an account?{" "}
-                    <button
-                      type="button"
-                      className="link-button"
-                      onClick={() => {
-                        setAuthMode("login");
-                        setAuthError(null);
-                      }}
-                    >
-                      Login
-                    </button>
-                  </>
-                )}
-              </div>
+              {ENABLE_LEGACY_EMAIL_PASSWORD_AUTH && (
+                <div className="helper-text" style={{ marginTop: 10 }}>
+                  {isLogin ? (
+                    <>
+                      Need an account?{" "}
+                      <button
+                        type="button"
+                        className="link-button"
+                        onClick={() => {
+                          setAuthMode("register");
+                          setAuthError(null);
+                        }}
+                      >
+                        Register
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      Already have an account?{" "}
+                      <button
+                        type="button"
+                        className="link-button"
+                        onClick={() => {
+                          setAuthMode("login");
+                          setAuthError(null);
+                        }}
+                      >
+                        Login
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
             </section>
           </main>
         </div>
@@ -1390,7 +1513,7 @@ function App() {
             <button
               type="button"
               className="btn-secondary btn"
-              onClick={handleLogout}
+              onClick={handleLogoutAll}
             >
               Logout
             </button>
